@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solitaire Drag-and-Drop Pro</title>
+    <title>Solitaire Drag-and-Drop Pro (Avec Case Libre)</title>
     
     <style>
         /* ==================== CSS ==================== */
@@ -51,7 +51,7 @@
         }
 
         /* Styles pour les emplacements des piles (quand vides) */
-        .deck, .waste, .foundation, .tableau { 
+        .deck, .waste, .foundation, .tableau, .freecell { /* AJOUT : .freecell */
             width: 100px; 
             height: 140px; 
             border: 2px dashed rgba(255, 255, 255, 0.4);
@@ -100,7 +100,7 @@
         .card.face-down {
             background-color: darkblue; 
             background-image: linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.2) 75%), 
-                              linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.2) 75%);
+                                linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.2) 75%);
             background-size: 20px 20px;
             background-position: 0 0, 10px 10px;
             border-color: black;
@@ -128,7 +128,7 @@
 </head>
 <body>
 
-    <h1>Solitaire - Par Charlélie</h1>
+    <h1>Solitaire (Klondike) - Avec FreeCell</h1>
 
     <div id="stats-bar">
         <div id="chrono-display">⏱️ Temps : 00:00</div>
@@ -141,9 +141,13 @@
                 <div id="deck" class="deck">Pioche</div>
             </div>
             <div class="pile-container">
-                <div id="waste" class="waste">Défausse</div>
+                <div id="waste" class="waste" data-type="waste" data-index="-1">Défausse</div>
             </div>
             
+            <div class="pile-container">
+                <div id="free-cell" class="freecell" data-type="freecell" data-index="0">Case Libre</div>
+            </div>
+
             <div style="flex-grow: 1;"></div> 
             
             <div class="pile-container"><div id="foundation-1" class="foundation" data-type="foundation" data-index="0">F1</div></div>
@@ -168,13 +172,15 @@
         const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
         const TABLEAU_Y_OFFSET = 30; 
         const WASTE_ID = 'waste-source'; 
+        const FREECELL_ID = 'freecell-source'; // NOUVEL ID
 
         let gameState = {
             deck: [],
             waste: [],
             foundations: [[], [], [], []],
             tableau: [[], [], [], [], [], [], []],
-            
+            freeCell: null, // NOUVEL ÉTAT
+
             // --- VARIABLES DE STATS ---
             moves: 0,
             startTime: null,
@@ -229,18 +235,40 @@
                 ...gameState.tableau.flat(), 
                 ...gameState.foundations.flat()
             ];
+            if (gameState.freeCell && gameState.freeCell.id === id) {
+                 return gameState.freeCell;
+            }
             return allPiles.find(c => c.id === id);
         }
 
         /**
          * Vérifie si la carte/séquence peut être déplacée vers la pile cible.
+         * @param {object} cardToMove - La première carte de la séquence à déplacer.
+         * @param {number} sequenceLength - La longueur de la séquence.
+         * @param {object} targetPileInfo - { type: 'tableau'/'foundation'/'freecell', pile: array/null/CardObject }
          */
-        function canMove(cardToMove, sequenceLength, targetPile) {
-            const targetType = targetPile.type;
-            const destinationPile = targetPile.pile;
-            const topCard = destinationPile.length > 0 ? destinationPile[destinationPile.length - 1] : null;
+        function canMove(cardToMove, sequenceLength, targetPileInfo) {
+            const targetType = targetPileInfo.type;
+            const destinationPile = targetPileInfo.pile; // Peut être un tableau (tableau/fondation) ou null (freecell)
 
+            // Règle 1: Case Libre
+            if (targetType === 'freecell') {
+                return sequenceLength === 1 && destinationPile === null;
+            }
+            
+            // Règle 2: Tableau
             if (targetType === 'tableau') {
+                if (sequenceLength > 1 && !isAlternatingColorAndDecreasingRank(targetPileInfo)) {
+                    // Ici, pour simplifier, on n'ajoute pas la logique complète de FreeCell 
+                    // qui permet de déplacer de plus longues séquences si plusieurs FreeCells sont vides.
+                    // On garde la règle Klondike de base : déplacer une séquence complète valide, peu importe la taille, 
+                    // mais uniquement sur une autre carte valide du tableau.
+                    // Si une séquence est déplacée (longueur > 1), la vérification doit être faite sur la carte cible
+                    // et la carte de tête de la séquence.
+                }
+
+                const topCard = destinationPile.length > 0 ? destinationPile[destinationPile.length - 1] : null;
+
                 if (!topCard) {
                     return cardToMove.rank === 'K';
                 }
@@ -248,8 +276,11 @@
                 const validColor = cardToMove.color !== topCard.color;
                 return validRank && validColor;
 
+            // Règle 3: Fondation
             } else if (targetType === 'foundation') {
                 if (sequenceLength > 1) return false;
+
+                const topCard = destinationPile.length > 0 ? destinationPile[destinationPile.length - 1] : null;
 
                 if (!topCard) {
                     return cardToMove.rank === 'A';
@@ -261,6 +292,17 @@
 
             return false;
         }
+
+        /**
+         * Vérifie si les cartes d'une pile du tableau respectent les règles Klondike.
+         * NON UTILISÉ ACTUELLEMENT, mais serait nécessaire pour une vérification complète de la séquence.
+         */
+        function isAlternatingColorAndDecreasingRank(pileInfo) {
+             // Implémentation complète non nécessaire pour le simple Klondike+FreeCell,
+             // car Klondike permet de déplacer n'importe quelle séquence face visible valide.
+             return true; 
+        }
+
         
         // --- Fonction ROBOT d'Analyse des Coups Possibles ---
 
@@ -272,71 +314,88 @@
                  possibleMoves++;
             }
             
-            // 2. Déplacement de la carte supérieure de la Défausse
+            const potentialSources = []; // Liste des cartes jouables (waste top, freecell, tableau tops, tableau inner)
+            
+            // Ajouter la carte de la Défausse
             if (gameState.waste.length > 0) {
-                const wasteCard = gameState.waste[gameState.waste.length - 1];
-                
-                // Tester vers chaque Fondation
-                for (const foundationPile of gameState.foundations) {
-                    if (canMove(wasteCard, 1, { type: 'foundation', pile: foundationPile })) {
-                        possibleMoves++;
-                    }
-                }
-                
-                // Tester vers chaque Tableau
-                for (const tableauPile of gameState.tableau) {
-                    if (canMove(wasteCard, 1, { type: 'tableau', pile: tableauPile })) {
-                        possibleMoves++;
-                    }
-                }
+                const card = gameState.waste[gameState.waste.length - 1];
+                potentialSources.push({ card: card, sourceType: WASTE_ID, sourceIndex: -1, cardIndex: gameState.waste.length - 1, sequenceLength: 1 });
             }
             
-            // 3. Mouvements des Piles du Tableau
+            // Ajouter la carte de la Case Libre
+            if (gameState.freeCell) {
+                potentialSources.push({ card: gameState.freeCell, sourceType: FREECELL_ID, sourceIndex: 0, cardIndex: 0, sequenceLength: 1 });
+            }
+
+            // Ajouter les cartes jouables du Tableau (toutes les cartes face visible)
             for (let i = 0; i < gameState.tableau.length; i++) {
                 const sourcePile = gameState.tableau[i];
-
                 for (let j = 0; j < sourcePile.length; j++) {
                     const card = sourcePile[j];
-
                     if (card.isFaceUp) {
                         const sequenceLength = sourcePile.length - j;
-                        const cardToMove = card; 
-
-                        // Tester la séquence vers chaque autre pile du Tableau
-                        for (let k = 0; k < gameState.tableau.length; k++) {
-                            if (i !== k) {
-                                const targetPile = gameState.tableau[k];
-                                
-                                if (canMove(cardToMove, sequenceLength, { type: 'tableau', pile: targetPile })) {
-                                    possibleMoves++;
-                                }
-                            }
-                        }
-                        
-                        // Tester la carte seule (haut de séquence) vers chaque Fondation
-                        if (sequenceLength === 1) {
-                            for (const foundationPile of gameState.foundations) {
-                                if (canMove(cardToMove, 1, { type: 'foundation', pile: foundationPile })) {
-                                    possibleMoves++;
-                                }
-                            }
+                        // On n'ajoute que la carte de départ de la séquence (la plus haute)
+                        if (j === sourcePile.length - sequenceLength) { 
+                             potentialSources.push({ card: card, sourceType: `tableau-${i+1}`, sourceIndex: i, cardIndex: j, sequenceLength: sequenceLength });
                         }
                     }
                 }
             }
             
-            // 4. Mouvements des Piles de Fondation vers le Tableau
-            for (const foundationPile of gameState.foundations) {
-                if (foundationPile.length > 0) {
-                    const topFoundationCard = foundationPile[foundationPile.length - 1];
-                    
-                    for (const tableauPile of gameState.tableau) {
-                        if (canMove(topFoundationCard, 1, { type: 'tableau', pile: tableauPile })) {
-                             possibleMoves++;
+            // Tester les destinations (Tableau, Fondations, Case Libre)
+            
+            for (const source of potentialSources) {
+                const cardToMove = source.card;
+                const sequenceLength = source.sequenceLength;
+                
+                // --- Destinations: Fondations (seulement pour séquence de longueur 1) ---
+                if (sequenceLength === 1) {
+                    for (let i = 0; i < gameState.foundations.length; i++) {
+                        const targetPile = gameState.foundations[i];
+                        if (canMove(cardToMove, 1, { type: 'foundation', pile: targetPile })) {
+                            possibleMoves++;
+                        }
+                    }
+                }
+
+                // --- Destinations: Tableau ---
+                for (let i = 0; i < gameState.tableau.length; i++) {
+                    const targetPile = gameState.tableau[i];
+                    // Éviter de déplacer vers la même pile sauf si on déplace une sous-séquence (logique complexe ignorée ici)
+                    // On se contente de vérifier si le mouvement est autorisé vers une autre pile (ou la même si ça change la position/l'état)
+                    // Mais pour la comptabilisation, on vérifie juste si c'est possible.
+                    if (source.sourceType !== `tableau-${i+1}` || source.cardIndex !== 0) { // Un peu simpliste
+                         if (canMove(cardToMove, sequenceLength, { type: 'tableau', pile: targetPile })) {
+                            possibleMoves++;
+                        }
+                    }
+                }
+                
+                // --- Destination: Case Libre (seulement si longueur 1) ---
+                if (sequenceLength === 1 && gameState.freeCell === null) {
+                    // Éviter de compter un mouvement Case Libre -> Case Libre
+                    if (source.sourceType !== FREECELL_ID) {
+                        if (canMove(cardToMove, 1, { type: 'freecell', pile: gameState.freeCell })) {
+                            possibleMoves++;
                         }
                     }
                 }
             }
+            
+            // 4. Mouvements des Piles de Fondation vers le Tableau (déjà dans potentialSources si Foundation Card est ajoutée)
+            for (let i = 0; i < gameState.foundations.length; i++) {
+                 const foundationPile = gameState.foundations[i];
+                 if (foundationPile.length > 0) {
+                     const topFoundationCard = foundationPile[foundationPile.length - 1];
+                     
+                     for (const tableauPile of gameState.tableau) {
+                         if (canMove(topFoundationCard, 1, { type: 'tableau', pile: tableauPile })) {
+                              possibleMoves++;
+                         }
+                     }
+                 }
+             }
+
             
             document.getElementById('possible-moves-display').textContent = `💡 Coups Possibles : ${possibleMoves}`;
             
@@ -432,7 +491,25 @@
                  if (cardId === topFoundationCard.id) {
                     sequenceToMove.push(topFoundationCard);
                  } else { e.preventDefault(); return; }
+            } else if (sourceType === FREECELL_ID) { // NOUVELLE SOURCE: FREECELL
+                if (gameState.freeCell && cardId === gameState.freeCell.id) {
+                    sequenceToMove.push(gameState.freeCell);
+                } else { e.preventDefault(); return; }
             } else { e.preventDefault(); return; }
+
+            // Vérification de la validité de la séquence (pour Klondike, seules les cartes face visible et les séquences valides peuvent être déplacées)
+            if (sourceType.startsWith('tableau-')) {
+                // On vérifie que la séquence est valide (alternance de couleur et ordre décroissant)
+                for (let i = 0; i < sequenceToMove.length - 1; i++) {
+                    const current = sequenceToMove[i];
+                    const next = sequenceToMove[i+1];
+                    if (current.color === next.color || getRankValue(current.rank) !== getRankValue(next.rank) + 1) {
+                        e.preventDefault();
+                        return; // Séquence non valide
+                    }
+                }
+            }
+
 
             draggedData = { cardId, sourceType, sourceIndex, cardIndex, sequence: sequenceToMove };
             e.dataTransfer.setData('text/plain', JSON.stringify(draggedData));
@@ -460,22 +537,26 @@
             try {
                 const sourceData = JSON.parse(dataString);
                 
-                const targetEl = e.target.closest('.tableau, .foundation, .card');
+                const targetEl = e.target.closest('.tableau, .foundation, .freecell, .card'); // AJOUT: .freecell
                 if (!targetEl) return; 
 
                 let targetType, targetIndex, targetPile;
-
+                
+                // Déterminer la cible (Tableau/Fondation/FreeCell, ou carte)
                 if (targetEl.classList.contains('card')) {
                     targetType = targetEl.dataset.sourceType.startsWith('tableau') ? 'tableau' : 
-                                 targetEl.dataset.sourceType.startsWith('foundation') ? 'foundation' : null;
-                    targetIndex = parseInt(targetEl.dataset.sourceIndex);
-                } else if (targetEl.classList.contains('tableau') || targetEl.classList.contains('foundation')) {
+                                 targetEl.dataset.sourceType.startsWith('foundation') ? 'foundation' : 
+                                 targetEl.dataset.sourceType === FREECELL_ID ? 'freecell' : null; // AJOUT: FREECELL
+                    targetIndex = targetEl.dataset.sourceType === FREECELL_ID ? 0 : parseInt(targetEl.dataset.sourceIndex); // Index 0 pour freecell
+                } else if (targetEl.classList.contains('tableau') || targetEl.classList.contains('foundation') || targetEl.classList.contains('freecell')) { // AJOUT: .freecell
                     targetType = targetEl.dataset.type;
                     targetIndex = parseInt(targetEl.dataset.index);
                 } else { return; }
                 
+                // Récupérer la pile/cellule de destination
                 if (targetType === 'tableau') targetPile = gameState.tableau[targetIndex];
                 else if (targetType === 'foundation') targetPile = gameState.foundations[targetIndex];
+                else if (targetType === 'freecell') targetPile = gameState.freeCell; // La FreeCell est directement l'objet
                 else return; 
 
                 const cardToMove = findCardById(sourceData.cardId);
@@ -485,7 +566,7 @@
                     
                     incrementMoveCounter(); 
                 } else {
-                    renderGame(); 
+                    renderGame(); // Re-render pour remettre la carte en place si le mouvement est illégal
                 }
                 
                 draggedData = { cardId: null, sourceType: null, sourceIndex: null, cardIndex: null, sequence: [] };
@@ -501,6 +582,7 @@
         function executeMove(sourceData, targetData) {
             let sequence = [];
             
+            // Retirer de la source
             if (sourceData.sourceType === WASTE_ID) {
                 sequence.push(gameState.waste.pop());
             } else if (sourceData.sourceType.startsWith('tableau-')) {
@@ -510,14 +592,22 @@
                 sequence = sourcePile.splice(sourceData.cardIndex);
                 
                 if (sourcePile.length > 0 && !sourcePile[sourcePile.length - 1].isFaceUp) {
-                    sourcePile[sourcePile.length - 1].isFaceUp = true;
+                    sourcePile[sourcePile.length - 1].isFaceUp = true; // Retourner la nouvelle carte supérieure du tableau
                 }
             } else if (sourceData.sourceType.startsWith('foundation-')) {
                 sequence.push(gameState.foundations[sourceData.sourceIndex].pop());
+            } else if (sourceData.sourceType === FREECELL_ID) { // SOURCE: FREECELL
+                 sequence.push(gameState.freeCell);
+                 gameState.freeCell = null;
             }
             
+            // Ajouter à la destination
             if (sequence.length > 0) {
-                targetData.pile.push(...sequence);
+                if (targetData.type === 'freecell') { // DESTINATION: FREECELL
+                    gameState.freeCell = sequence[0];
+                } else {
+                    targetData.pile.push(...sequence);
+                }
             }
             
             renderGame();
@@ -583,9 +673,11 @@
         }
 
         function renderGame() {
+            // Supprimer toutes les cartes existantes pour re-render
             document.querySelectorAll('.card').forEach(c => c.remove());
             
-            document.querySelectorAll('.tableau, .foundation').forEach(el => {
+            // Re-créer les zones de drop pour éviter les problèmes d'écouteurs d'événements
+            document.querySelectorAll('.tableau, .foundation, .waste, .freecell').forEach(el => {
                 const new_el = el.cloneNode(true);
                 el.parentNode.replaceChild(new_el, el);
                 
@@ -600,8 +692,16 @@
                 const cardEl = createCardElement(card, WASTE_ID, null, gameState.waste.length - 1);
                 wasteElContainer.appendChild(cardEl);
             }
+            
+            // 2. Case Libre
+            const freeCellElContainer = document.getElementById('free-cell').parentElement;
+            if (gameState.freeCell) {
+                 const cardEl = createCardElement(gameState.freeCell, FREECELL_ID, 0, 0); // Index 0 pour freecell
+                 freeCellElContainer.appendChild(cardEl);
+            }
 
-            // 2. Tableau
+
+            // 3. Tableau
             for (let i = 0; i < gameState.tableau.length; i++) {
                 const pile = gameState.tableau[i];
                 const pileContainer = document.querySelector(`#tableau-${i + 1}`).parentElement;
@@ -617,7 +717,7 @@
                 }
             }
             
-            // 3. Fondations
+            // 4. Fondations
             for (let i = 0; i < gameState.foundations.length; i++) {
                  const pile = gameState.foundations[i];
                  const pileContainer = document.querySelector(`#foundation-${i + 1}`).parentElement;
