@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solitaire Basique</title>
+    <title>Solitaire Drag-and-Drop Pro</title>
     
     <style>
         /* ==================== CSS ==================== */
@@ -17,6 +17,19 @@
             padding: 20px;
         }
 
+        /* Barre des Statistiques */
+        #stats-bar {
+            display: flex; 
+            justify-content: space-around; 
+            width: 90%;
+            max-width: 900px;
+            margin-bottom: 20px; 
+            font-size: 1.2em;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
         #game-board {
             display: flex;
             flex-direction: column;
@@ -24,7 +37,6 @@
             max-width: 1200px;
         }
 
-        /* --- Sections Supérieure et Inférieure --- */
         #top-section {
             display: flex;
             justify-content: space-between;
@@ -38,6 +50,7 @@
             margin: 0 10px;
         }
 
+        /* Styles pour les emplacements des piles (quand vides) */
         .deck, .waste, .foundation, .tableau { 
             width: 100px; 
             height: 140px; 
@@ -51,6 +64,8 @@
             position: absolute;
             top: 0;
             left: 0;
+            user-select: none;
+            cursor: pointer; 
         }
         
         #tableau-section {
@@ -66,23 +81,31 @@
             border-radius: 6px;
             background-color: white;
             position: absolute;
-            cursor: pointer;
+            cursor: grab; 
             box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-            transition: top 0.3s, left 0.3s;
+            transition: top 0.1s, transform 0.1s;
             box-sizing: border-box;
             padding: 5px;
             font-size: 20px;
             line-height: 1.2;
         }
 
+        /* Style pour la séquence en cours de glissement (visuel) */
+        .card.dragging-sequence {
+            opacity: 0.7;
+            border: 2px dashed orange;
+            z-index: 1000 !important;
+        }
+
         .card.face-down {
-            background-color: darkblue; /* Dos de la carte */
+            background-color: darkblue; 
             background-image: linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.2) 75%), 
                               linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.2) 75%);
             background-size: 20px 20px;
             background-position: 0 0, 10px 10px;
             border-color: black;
             color: transparent;
+            cursor: default; 
         }
 
         .red { color: red; }
@@ -105,8 +128,13 @@
 </head>
 <body>
 
-    <h1>Solitaire Basique</h1>
+    <h1>Solitaire - Par Charlélie</h1>
 
+    <div id="stats-bar">
+        <div id="chrono-display">⏱️ Temps : 00:00</div>
+        <div id="moves-display">➡️ Coups : 0</div>
+        <div id="possible-moves-display">💡 Coups Possibles : N/A</div> 
+    </div>
     <div id="game-board">
         <div id="top-section">
             <div class="pile-container">
@@ -116,38 +144,56 @@
                 <div id="waste" class="waste">Défausse</div>
             </div>
             
-            <div style="flex-grow: 1;"></div> <div class="pile-container"><div id="foundation-1" class="foundation">F1</div></div>
-            <div class="pile-container"><div id="foundation-2" class="foundation">F2</div></div>
-            <div class="pile-container"><div id="foundation-3" class="foundation">F3</div></div>
-            <div class="pile-container"><div id="foundation-4" class="foundation">F4</div></div>
+            <div style="flex-grow: 1;"></div> 
+            
+            <div class="pile-container"><div id="foundation-1" class="foundation" data-type="foundation" data-index="0">F1</div></div>
+            <div class="pile-container"><div id="foundation-2" class="foundation" data-type="foundation" data-index="1">F2</div></div>
+            <div class="pile-container"><div id="foundation-3" class="foundation" data-type="foundation" data-index="2">F3</div></div>
+            <div class="pile-container"><div id="foundation-4" class="foundation" data-type="foundation" data-index="3">F4</div></div>
         </div>
 
         <div id="tableau-section">
-            <div class="pile-container"><div id="tableau-1" class="tableau">T1</div></div>
-            <div class="pile-container"><div id="tableau-2" class="tableau">T2</div></div>
-            <div class="pile-container"><div id="tableau-3" class="tableau">T3</div></div>
-            <div class="pile-container"><div id="tableau-4" class="tableau">T4</div></div>
-            <div class="pile-container"><div id="tableau-5" class="tableau">T5</div></div>
-            <div class="pile-container"><div id="tableau-6" class="tableau">T6</div></div>
-            <div class="pile-container"><div id="tableau-7" class="tableau">T7</div></div>
+            <div class="pile-container"><div id="tableau-1" class="tableau" data-type="tableau" data-index="0">T1</div></div>
+            <div class="pile-container"><div id="tableau-2" class="tableau" data-type="tableau" data-index="1">T2</div></div>
+            <div class="pile-container"><div id="tableau-3" class="tableau" data-type="tableau" data-index="2">T3</div></div>
+            <div class="pile-container"><div id="tableau-4" class="tableau" data-type="tableau" data-index="3">T4</div></div>
+            <div class="pile-container"><div id="tableau-5" class="tableau" data-type="tableau" data-index="4">T5</div></div>
+            <div class="pile-container"><div id="tableau-6" class="tableau" data-type="tableau" data-index="5">T6</div></div>
+            <div class="pile-container"><div id="tableau-7" class="tableau" data-type="tableau" data-index="6">T7</div></div>
         </div>
     </div>
 
     <script>
         const SUITS = ['♥', '♦', '♣', '♠'];
         const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-        const CARD_WIDTH = 100;
-        const CARD_HEIGHT = 140;
-        const TABLEAU_Y_OFFSET = 30; // Décalage vertical pour les cartes du tableau
+        const TABLEAU_Y_OFFSET = 30; 
+        const WASTE_ID = 'waste-source'; 
 
         let gameState = {
             deck: [],
             waste: [],
             foundations: [[], [], [], []],
-            tableau: [[], [], [], [], [], [], []]
+            tableau: [[], [], [], [], [], [], []],
+            
+            // --- VARIABLES DE STATS ---
+            moves: 0,
+            startTime: null,
+            timerInterval: null,
+            gameStarted: false,
+            gameFinished: false
+        };
+        
+        let draggedData = {
+            cardId: null,
+            sourceType: null,
+            sourceIndex: null,
+            cardIndex: null,
+            sequence: []
         };
 
-        // 1. Création du jeu de 52 cartes
+
+        // --- Fonctions de Base & Utilitaires ---
+
         function createDeck() {
             let deck = [];
             for (const suit of SUITS) {
@@ -155,53 +201,364 @@
                     deck.push({
                         rank: RANKS[i],
                         suit: suit,
-                        value: i + 1, // 1 pour As, 13 pour Roi
+                        value: i + 1, 
                         color: (suit === '♥' || suit === '♦') ? 'red' : 'black',
                         isFaceUp: false,
-                        id: `${RANKS[i]}${suit}`
+                        id: `${RANKS[i]}${suit}-${i}-${SUITS.indexOf(suit)}`
                     });
                 }
             }
             return deck;
         }
 
-        // 2. Mélange (Algorithme de Fisher-Yates)
+        // Algorithme de mélange (Fisher-Yates)
         function shuffle(array) {
             for (let i = array.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [array[i], array[j]] = [array[j], array[i]];
+                [array[i], array[j]] = [array[j], array[i]]; 
             }
         }
+        
+        function getRankValue(rank) {
+            return RANKS.indexOf(rank) + 1;
+        }
+        
+        function findCardById(id) {
+            const allPiles = [
+                ...gameState.waste, 
+                ...gameState.tableau.flat(), 
+                ...gameState.foundations.flat()
+            ];
+            return allPiles.find(c => c.id === id);
+        }
 
-        // 3. Initialisation du plateau de jeu
-        function initializeGame() {
-            // Créer et mélanger le jeu
-            gameState.deck = createDeck();
-            shuffle(gameState.deck);
+        /**
+         * Vérifie si la carte/séquence peut être déplacée vers la pile cible.
+         */
+        function canMove(cardToMove, sequenceLength, targetPile) {
+            const targetType = targetPile.type;
+            const destinationPile = targetPile.pile;
+            const topCard = destinationPile.length > 0 ? destinationPile[destinationPile.length - 1] : null;
+
+            if (targetType === 'tableau') {
+                if (!topCard) {
+                    return cardToMove.rank === 'K';
+                }
+                const validRank = getRankValue(cardToMove.rank) === getRankValue(topCard.rank) - 1;
+                const validColor = cardToMove.color !== topCard.color;
+                return validRank && validColor;
+
+            } else if (targetType === 'foundation') {
+                if (sequenceLength > 1) return false;
+
+                if (!topCard) {
+                    return cardToMove.rank === 'A';
+                }
+                const validRank = getRankValue(cardToMove.rank) === getRankValue(topCard.rank) + 1;
+                const validSuit = cardToMove.suit === topCard.suit;
+                return validRank && validSuit;
+            }
+
+            return false;
+        }
+        
+        // --- Fonction ROBOT d'Analyse des Coups Possibles ---
+
+        function countPossibleMoves() {
+            let possibleMoves = 0;
             
-            // Distribution du Tableau (7 piles)
-            for (let i = 0; i < 7; i++) {
-                for (let j = 0; j <= i; j++) {
-                    const card = gameState.deck.pop();
-                    // La dernière carte de chaque pile du tableau est face visible
-                    card.isFaceUp = (j === i); 
-                    gameState.tableau[i].push(card);
+            // 1. Clic sur la Pioche (retournement ou réinitialisation)
+            if (gameState.deck.length > 0 || gameState.waste.length > 0) {
+                 possibleMoves++;
+            }
+            
+            // 2. Déplacement de la carte supérieure de la Défausse
+            if (gameState.waste.length > 0) {
+                const wasteCard = gameState.waste[gameState.waste.length - 1];
+                
+                // Tester vers chaque Fondation
+                for (const foundationPile of gameState.foundations) {
+                    if (canMove(wasteCard, 1, { type: 'foundation', pile: foundationPile })) {
+                        possibleMoves++;
+                    }
+                }
+                
+                // Tester vers chaque Tableau
+                for (const tableauPile of gameState.tableau) {
+                    if (canMove(wasteCard, 1, { type: 'tableau', pile: tableauPile })) {
+                        possibleMoves++;
+                    }
                 }
             }
             
-            // Le reste va dans la Pioche
-            // gameState.deck est déjà rempli avec les cartes restantes
+            // 3. Mouvements des Piles du Tableau
+            for (let i = 0; i < gameState.tableau.length; i++) {
+                const sourcePile = gameState.tableau[i];
+
+                for (let j = 0; j < sourcePile.length; j++) {
+                    const card = sourcePile[j];
+
+                    if (card.isFaceUp) {
+                        const sequenceLength = sourcePile.length - j;
+                        const cardToMove = card; 
+
+                        // Tester la séquence vers chaque autre pile du Tableau
+                        for (let k = 0; k < gameState.tableau.length; k++) {
+                            if (i !== k) {
+                                const targetPile = gameState.tableau[k];
+                                
+                                if (canMove(cardToMove, sequenceLength, { type: 'tableau', pile: targetPile })) {
+                                    possibleMoves++;
+                                }
+                            }
+                        }
+                        
+                        // Tester la carte seule (haut de séquence) vers chaque Fondation
+                        if (sequenceLength === 1) {
+                            for (const foundationPile of gameState.foundations) {
+                                if (canMove(cardToMove, 1, { type: 'foundation', pile: foundationPile })) {
+                                    possibleMoves++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             
-            renderGame(); // Afficher les cartes sur l'écran
+            // 4. Mouvements des Piles de Fondation vers le Tableau
+            for (const foundationPile of gameState.foundations) {
+                if (foundationPile.length > 0) {
+                    const topFoundationCard = foundationPile[foundationPile.length - 1];
+                    
+                    for (const tableauPile of gameState.tableau) {
+                        if (canMove(topFoundationCard, 1, { type: 'tableau', pile: tableauPile })) {
+                             possibleMoves++;
+                        }
+                    }
+                }
+            }
+            
+            document.getElementById('possible-moves-display').textContent = `💡 Coups Possibles : ${possibleMoves}`;
+            
+            return possibleMoves;
+        }
+
+
+        // --- Fonctions Statistiques et Chrono ---
+        
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            const pad = (num) => String(num).padStart(2, '0');
+            return `${pad(minutes)}:${pad(remainingSeconds)}`;
+        }
+
+        function startTimer() {
+            if (gameState.timerInterval !== null) return;
+            gameState.startTime = Date.now();
+            
+            gameState.timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+                document.getElementById('chrono-display').textContent = `⏱️ Temps : ${formatTime(elapsed)}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (gameState.timerInterval !== null) {
+                clearInterval(gameState.timerInterval);
+                gameState.timerInterval = null;
+            }
         }
         
-        // 4. Fonction pour créer l'élément HTML d'une carte
-        function createCardElement(card) {
+        function incrementMoveCounter() {
+            if (gameState.gameFinished) return;
+            
+            if (!gameState.gameStarted) {
+                gameState.gameStarted = true;
+                startTimer();
+            }
+            
+            gameState.moves++;
+            document.getElementById('moves-display').textContent = `➡️ Coups : ${gameState.moves}`;
+            checkWinCondition(); 
+            countPossibleMoves(); // Mettre à jour après chaque coup
+        }
+
+        function checkWinCondition() {
+            const totalFoundationCards = gameState.foundations.reduce((sum, pile) => sum + pile.length, 0);
+            
+            if (totalFoundationCards === 52) {
+                gameState.gameFinished = true;
+                stopTimer();
+                
+                const finalTime = document.getElementById('chrono-display').textContent.replace('⏱️ Temps : ', '');
+                
+                alert(`Félicitations ! Vous avez gagné en ${finalTime} et ${gameState.moves} coups !`);
+                document.getElementById('chrono-display').textContent += " (FINI)";
+            }
+        }
+
+        // --- Gestion des Événements DRAG-AND-DROP ---
+        
+        function handleDragStart(e) {
+            const cardEl = e.target.closest('.card');
+            if (!cardEl || gameState.gameFinished) return;
+            
+            const cardId = cardEl.dataset.id;
+            const sourceType = cardEl.dataset.sourceType;
+            const sourceIndex = parseInt(cardEl.dataset.sourceIndex);
+            const cardIndex = parseInt(cardEl.dataset.cardIndex);
+            
+            const card = findCardById(cardId);
+            if (!card || !card.isFaceUp) {
+                e.preventDefault(); 
+                return;
+            }
+            
+            let sequenceToMove = [];
+            
+            if (sourceType === WASTE_ID) {
+                const topWasteCard = gameState.waste[gameState.waste.length - 1];
+                if (cardId === topWasteCard.id) {
+                    sequenceToMove.push(topWasteCard);
+                } else { e.preventDefault(); return; }
+            } else if (sourceType.startsWith('tableau-')) {
+                const sourcePile = gameState.tableau[sourceIndex];
+                sequenceToMove = sourcePile.slice(cardIndex); 
+                if (!sequenceToMove[0].isFaceUp) { e.preventDefault(); return; }
+            } else if (sourceType.startsWith('foundation-')) {
+                 const sourcePile = gameState.foundations[sourceIndex];
+                 const topFoundationCard = sourcePile[sourcePile.length - 1];
+                 if (cardId === topFoundationCard.id) {
+                    sequenceToMove.push(topFoundationCard);
+                 } else { e.preventDefault(); return; }
+            } else { e.preventDefault(); return; }
+
+            draggedData = { cardId, sourceType, sourceIndex, cardIndex, sequence: sequenceToMove };
+            e.dataTransfer.setData('text/plain', JSON.stringify(draggedData));
+            
+            sequenceToMove.forEach(c => {
+                 document.querySelector(`[data-id="${c.id}"]`).classList.add('dragging-sequence');
+            });
+            
+            e.dataTransfer.setDragImage(cardEl, 0, 0); 
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault(); 
+        }
+        
+        function handleDragEnd(e) {
+            document.querySelectorAll('.dragging-sequence').forEach(el => el.classList.remove('dragging-sequence'));
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            const dataString = e.dataTransfer.getData('text/plain');
+            if (!dataString || gameState.gameFinished) return;
+            
+            try {
+                const sourceData = JSON.parse(dataString);
+                
+                const targetEl = e.target.closest('.tableau, .foundation, .card');
+                if (!targetEl) return; 
+
+                let targetType, targetIndex, targetPile;
+
+                if (targetEl.classList.contains('card')) {
+                    targetType = targetEl.dataset.sourceType.startsWith('tableau') ? 'tableau' : 
+                                 targetEl.dataset.sourceType.startsWith('foundation') ? 'foundation' : null;
+                    targetIndex = parseInt(targetEl.dataset.sourceIndex);
+                } else if (targetEl.classList.contains('tableau') || targetEl.classList.contains('foundation')) {
+                    targetType = targetEl.dataset.type;
+                    targetIndex = parseInt(targetEl.dataset.index);
+                } else { return; }
+                
+                if (targetType === 'tableau') targetPile = gameState.tableau[targetIndex];
+                else if (targetType === 'foundation') targetPile = gameState.foundations[targetIndex];
+                else return; 
+
+                const cardToMove = findCardById(sourceData.cardId);
+                
+                if (canMove(cardToMove, sourceData.sequence.length, { type: targetType, pile: targetPile })) {
+                    executeMove(sourceData, { type: targetType, index: targetIndex, pile: targetPile });
+                    
+                    incrementMoveCounter(); 
+                } else {
+                    renderGame(); 
+                }
+                
+                draggedData = { cardId: null, sourceType: null, sourceIndex: null, cardIndex: null, sequence: [] };
+
+            } catch (error) {
+                console.error("Erreur lors du drop:", error);
+                renderGame();
+            }
+        }
+        
+        // --- Moteur de Jeu (Exécution du Mouvement) ---
+
+        function executeMove(sourceData, targetData) {
+            let sequence = [];
+            
+            if (sourceData.sourceType === WASTE_ID) {
+                sequence.push(gameState.waste.pop());
+            } else if (sourceData.sourceType.startsWith('tableau-')) {
+                const sourcePileIndex = sourceData.sourceIndex;
+                const sourcePile = gameState.tableau[sourcePileIndex];
+                
+                sequence = sourcePile.splice(sourceData.cardIndex);
+                
+                if (sourcePile.length > 0 && !sourcePile[sourcePile.length - 1].isFaceUp) {
+                    sourcePile[sourcePile.length - 1].isFaceUp = true;
+                }
+            } else if (sourceData.sourceType.startsWith('foundation-')) {
+                sequence.push(gameState.foundations[sourceData.sourceIndex].pop());
+            }
+            
+            if (sequence.length > 0) {
+                targetData.pile.push(...sequence);
+            }
+            
+            renderGame();
+        }
+
+        // Gestion du Clic sur la Pioche
+        function setupDeckClick() {
+            const deckElContainer = document.getElementById('deck').parentElement;
+            deckElContainer.addEventListener('click', () => {
+                if (gameState.gameFinished) return;
+                
+                if (gameState.deck.length > 0) {
+                    const card = gameState.deck.pop();
+                    card.isFaceUp = true; 
+                    gameState.waste.push(card);
+                    
+                    incrementMoveCounter(); 
+                    
+                } else if (gameState.waste.length > 0) {
+                    while (gameState.waste.length > 0) {
+                        const card = gameState.waste.pop();
+                        card.isFaceUp = false; 
+                        gameState.deck.push(card);
+                    }
+                    
+                    incrementMoveCounter(); 
+                }
+                renderGame(); 
+            });
+        }
+
+
+        // --- Affichage (DOM) et Initialisation ---
+        
+        function createCardElement(card, sourceType, pileIndex, cardIndex) {
             const cardEl = document.createElement('div');
             cardEl.className = `card ${card.color} ${card.isFaceUp ? 'face-up' : 'face-down'}`;
             cardEl.dataset.id = card.id;
-            cardEl.dataset.rank = card.rank;
-            cardEl.dataset.suit = card.suit;
+            cardEl.dataset.sourceType = sourceType;
+            cardEl.dataset.sourceIndex = pileIndex;
+            cardEl.dataset.cardIndex = cardIndex;
             
             if (card.isFaceUp) {
                 cardEl.innerHTML = `
@@ -211,63 +568,87 @@
                         <div class="rank-suit" style="text-align: right; transform: rotate(180deg);">${card.rank}<span class="${card.color}">${card.suit}</span></div>
                     </div>
                 `;
+                cardEl.setAttribute('draggable', 'true'); 
+                cardEl.addEventListener('dragstart', handleDragStart);
+                cardEl.addEventListener('dragover', handleDragOver);
+                cardEl.addEventListener('drop', handleDrop);
+                cardEl.addEventListener('dragend', handleDragEnd);
             } else {
-                cardEl.innerHTML = ''; // Dos de carte
+                cardEl.innerHTML = ''; 
+                cardEl.classList.add('face-down');
+                cardEl.setAttribute('draggable', 'false');
             }
 
             return cardEl;
         }
 
-        // 5. Fonction pour mettre à jour l'affichage
         function renderGame() {
-            // Effacer toutes les cartes existantes
             document.querySelectorAll('.card').forEach(c => c.remove());
-
-            // A. Afficher la Pioche (Deck)
-            const deckEl = document.getElementById('deck');
-            if (gameState.deck.length > 0) {
-                const topCard = gameState.deck[gameState.deck.length - 1];
-                topCard.isFaceUp = false; // Pioche est toujours face cachée
-                const cardEl = createCardElement(topCard);
-                cardEl.classList.add('face-down');
-                cardEl.style.zIndex = gameState.deck.length;
-                deckEl.parentElement.appendChild(cardEl);
-            }
-
-            // B. Afficher la Défausse (Waste)
-            const wasteEl = document.getElementById('waste');
+            
+            document.querySelectorAll('.tableau, .foundation').forEach(el => {
+                const new_el = el.cloneNode(true);
+                el.parentNode.replaceChild(new_el, el);
+                
+                new_el.addEventListener('dragover', handleDragOver);
+                new_el.addEventListener('drop', handleDrop);
+            });
+            
+            // 1. Pioche & Défausse
+            const wasteElContainer = document.getElementById('waste').parentElement;
             if (gameState.waste.length > 0) {
-                const topCard = gameState.waste[gameState.waste.length - 1];
-                topCard.isFaceUp = true;
-                const cardEl = createCardElement(topCard);
-                cardEl.style.zIndex = gameState.waste.length;
-                cardEl.style.left = '0'; // Position de la carte supérieure
-                wasteEl.parentElement.appendChild(cardEl);
+                const card = gameState.waste[gameState.waste.length - 1];
+                const cardEl = createCardElement(card, WASTE_ID, null, gameState.waste.length - 1);
+                wasteElContainer.appendChild(cardEl);
             }
 
-            // C. Afficher les Piles du Tableau
+            // 2. Tableau
             for (let i = 0; i < gameState.tableau.length; i++) {
                 const pile = gameState.tableau[i];
-                const pileContainer = document.getElementById(`tableau-${i + 1}`).parentElement;
+                const pileContainer = document.querySelector(`#tableau-${i + 1}`).parentElement;
                 
                 for (let j = 0; j < pile.length; j++) {
                     const card = pile[j];
-                    const cardEl = createCardElement(card);
+                    const cardEl = createCardElement(card, `tableau-${i+1}`, i, j); 
                     
-                    // Empiler visuellement les cartes
                     cardEl.style.top = `${j * TABLEAU_Y_OFFSET}px`;
-                    cardEl.style.left = '0';
-                    cardEl.style.zIndex = j; // La dernière carte est au-dessus
+                    cardEl.style.zIndex = j; 
                     
                     pileContainer.appendChild(cardEl);
                 }
             }
             
-            // D. Afficher les Fondations (Pour l'instant, juste les conteneurs vides)
-            // ... (La logique pour afficher la carte supérieure serait similaire au waste)
+            // 3. Fondations
+            for (let i = 0; i < gameState.foundations.length; i++) {
+                 const pile = gameState.foundations[i];
+                 const pileContainer = document.querySelector(`#foundation-${i + 1}`).parentElement;
+                 
+                 if (pile.length > 0) {
+                     const card = pile[pile.length - 1];
+                     const cardEl = createCardElement(card, `foundation-${i+1}`, i, pile.length - 1);
+                     pileContainer.appendChild(cardEl);
+                 }
+            }
+            
+            // Mettre à jour les coups possibles
+            countPossibleMoves();
         }
 
-        // Démarrer le jeu au chargement de la page
+        function initializeGame() {
+            gameState.deck = createDeck();
+            shuffle(gameState.deck); 
+            
+            for (let i = 0; i < 7; i++) {
+                for (let j = 0; j <= i; j++) {
+                    const card = gameState.deck.pop();
+                    card.isFaceUp = (j === i); 
+                    gameState.tableau[i].push(card);
+                }
+            }
+            
+            setupDeckClick(); 
+            renderGame(); 
+        }
+
         document.addEventListener('DOMContentLoaded', initializeGame);
 
     </script>
